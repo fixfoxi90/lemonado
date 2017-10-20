@@ -2,7 +2,13 @@
 
 namespace Lemonado;
 
-
+/**
+ * Class Application
+ *
+ * @author Felix Steidler
+ * @copyright felix-steidler.de
+ * @package Lemonado
+ */
 final class Application
 {
     /**

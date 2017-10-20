@@ -2,7 +2,8 @@
 
 namespace Lemonado\Services;
 
-
+use Lemonado\Exceptions\UnkownConfigException;
+use Lemonado\Exceptions\UnkownServiceException;
 use Psr\Container\ContainerExceptionInterface;
 use Psr\Container\ContainerInterface;
 use Psr\Container\NotFoundExceptionInterface;
@@ -10,7 +11,7 @@ use Psr\Container\NotFoundExceptionInterface;
 /**
  * Class Manager
  *
- * @author Felix Steidler <info@felix-steidler.de>
+ * @author Felix Steidler
  * @copyright felix-steidler.de
  * @package Lemonado\Services
  */
@@ -28,15 +29,78 @@ final class Manager implements ContainerInterface
 
     /**
      * Manager constructor.
+     *
+     * @param array $service_config Service config array
+     * @throws UnkownConfigException Invalid service config given
      */
     public function __construct(array $service_config)
     {
 
         foreach ($service_config as $type => $services) {
 
-            if (!in_array($type))
+            if (!in_array($type, [self::TYPE_ALIAS, self::TYPE_DYNAMIC, self::TYPE_STATIC])) {
+                throw new UnkownConfigException('Unkown config type ' . $type);
+            }
+
+            if (!is_array($services)) {
+                throw new UnkownConfigException('Services must be type of array');
+            }
+
+            foreach ($services as $key => $service) {
+
+                if (!is_callable($services) || !is_string($service)) {
+                    throw new UnkownConfigException('Service ' . (string)$service . ' must be callable class string');
+                }
+
+                if (isset($this->services[$key])) {
+                    throw new UnkownConfigException('Dupplicated service key ' . $key);
+                }
+
+                if ($type === self::TYPE_STATIC) {
+                    $service = $service();
+                }
+
+                $this->services[$key] = [
+                    'type' => $type,
+                    'class' => $service
+                ];
+
+            }
 
         }
+
+    }
+
+    /**
+     * Append service to manager
+     *
+     * @param string $key Key
+     * @param string $service Service
+     * @param string $type Type
+     * @throws UnkownConfigException Invalid service data
+     */
+    public function append($key, $service, $type) {
+
+        if (isset($this->services[$key])) {
+            throw new UnkownConfigException('Dupplicated service key ' . $key);
+        }
+
+        if (!is_callable($service) || !is_string($service)) {
+            throw new UnkownConfigException('Service ' . (string)$service . ' must be callable class string');
+        }
+
+        if (!in_array($type, [self::TYPE_ALIAS, self::TYPE_DYNAMIC, self::TYPE_STATIC])) {
+            throw new UnkownConfigException('Unkown config type ' . $type);
+        }
+
+        if ($type === self::TYPE_STATIC) {
+            $service = $service();
+        }
+
+        $this->services[$key] = [
+            'type' => $type,
+            'class' => $service
+        ];
 
     }
 
@@ -52,7 +116,36 @@ final class Manager implements ContainerInterface
      */
     public function get($id)
     {
-        // TODO: Implement get() method.
+
+        if (!$this->has($id)) {
+            throw new UnkownServiceException('Unkown service ' . $id);
+        }
+
+        $service = $this->services[$id];
+
+        $service_type = $service['type'];
+        $service_class = $service['class'];
+
+        switch($service_type) {
+
+            case self::TYPE_ALIAS:
+                return $this->get($service_class);
+
+            case self::TYPE_DYNAMIC:
+                return $service_class();
+
+            case self::TYPE_STATIC:
+
+                if (!is_object($service_class)) {
+                    throw new UnkownServiceException('Invalid serivce type');
+                }
+
+                return $service_class;
+
+        }
+
+        throw new UnkownServiceException('Unkown service ' . $id);
+
     }
 
     /**
@@ -68,6 +161,6 @@ final class Manager implements ContainerInterface
      */
     public function has($id)
     {
-        return isset($services);
+        return isset($services[$id]);
     }
 }

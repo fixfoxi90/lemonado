@@ -33,7 +33,7 @@ class Session
     }
 
     public function get($key) {
-        
+
     }
 
     /**

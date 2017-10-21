@@ -61,10 +61,7 @@ final class Manager implements ContainerInterface
                     throw new UnkownConfigException('Dupplicated service key ' . $key);
                 }
 
-                self::$services[$key] = [
-                    'type' => $type,
-                    'class' => $type === self::TYPE_STATIC ? $this->create_service($service) : $service
-                ];
+                $this->appendService($key, $type, $service);
 
             }
 
@@ -125,9 +122,22 @@ final class Manager implements ContainerInterface
             throw new UnkownConfigException('Unkown config type ' . $type);
         }
 
+        $this->appendService($key, $type, $service);
+
+    }
+
+    /**
+     * Append service
+     *
+     * @param string $key Key
+     * @param string $type Type of service
+     * @param string $service Service
+     */
+    private function appendService($key, $type, $service) {
+
         self::$services[$key] = [
             'type' => $type,
-            'class' => $type === self::TYPE_STATIC ? $this->create_service($service) : $service
+            'class' => $service
         ];
 
     }
@@ -164,12 +174,12 @@ final class Manager implements ContainerInterface
 
             case self::TYPE_STATIC:
 
-                if (!is_object($service_class)) {
-                    throw new UnkownServiceException('Invalid serivce type');
+                if (is_object($service_class)) {
+                    return $service_class;
                 }
 
-                return $service_class;
-
+                return self::$services[$id]['class'] = $this->create_service($service_class);
+            
         }
 
         throw new UnkownServiceException('Unkown service ' . $id);

@@ -2,6 +2,10 @@
 
 namespace Lemonado;
 
+use Lemonado\Server\Request;
+use Lemonado\Services\Config\ConfigService;
+use Lemonado\Services\Manager;
+
 /**
  * Class Application
  *
@@ -12,11 +16,9 @@ namespace Lemonado;
 final class Application
 {
     /**
-     * @var array
+     * @var Manager
      */
-    private $config;
-
-    private $container;
+    private $service_manager;
 
     /**
      * Application constructor.
@@ -25,8 +27,21 @@ final class Application
      */
     public function __construct(array $config)
     {
-        $this->config = $config;
+        $this->service_manager = new Manager(new ConfigService($config));
     }
 
+    public function run()
+    {
+        $request = new Request();
+    }
+
+    /**
+     * Get Config
+     *
+     * @return array
+     */
+    public function getConfig() {
+        return $this->service_manager->get(Manager::CONFIG_SERIVCE);
+    }
 
 }

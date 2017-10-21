@@ -4,6 +4,7 @@ namespace Lemonado\Services;
 
 use Lemonado\Exceptions\UnkownConfigException;
 use Lemonado\Exceptions\UnkownServiceException;
+use Lemonado\Services\Config\ConfigService;
 use Psr\Container\ContainerExceptionInterface;
 use Psr\Container\ContainerInterface;
 use Psr\Container\NotFoundExceptionInterface;
@@ -22,21 +23,25 @@ final class Manager implements ContainerInterface
     const TYPE_DYNAMIC = 'dynamic';
     const TYPE_STATIC = 'static';
 
+    const CONFIG_SERIVCE = 'config';
+
     /**
      * @var
      */
-    private $services;
+    private static $services;
 
     /**
      * Manager constructor.
      *
-     * @param array $service_config Service config array
+     * @param ConfigService $configService Config service
      * @throws UnkownConfigException Invalid service config given
      */
-    public function __construct(array $service_config)
+    public function __construct(ConfigService $configService)
     {
 
-        foreach ($service_config as $type => $services) {
+        $this->setConfigs($configService);
+
+        foreach ($configService->getServices() as $type => $services) {
 
             if (!in_array($type, [self::TYPE_ALIAS, self::TYPE_DYNAMIC, self::TYPE_STATIC])) {
                 throw new UnkownConfigException('Unkown config type ' . $type);
@@ -48,26 +53,53 @@ final class Manager implements ContainerInterface
 
             foreach ($services as $key => $service) {
 
-                if (!is_callable($services) || !is_string($service)) {
-                    throw new UnkownConfigException('Service ' . (string)$service . ' must be callable class string');
+                if (!class_exists($service)) {
+                    throw new UnkownConfigException('Cannot find service class ' . $service);
                 }
 
-                if (isset($this->services[$key])) {
+                if (isset(self::$services[$key])) {
                     throw new UnkownConfigException('Dupplicated service key ' . $key);
                 }
 
-                if ($type === self::TYPE_STATIC) {
-                    $service = $service();
-                }
-
-                $this->services[$key] = [
+                self::$services[$key] = [
                     'type' => $type,
-                    'class' => $service
+                    'class' => $type === self::TYPE_STATIC ? $this->create_service($service) : $service
                 ];
 
             }
 
         }
+
+    }
+
+    /**
+     * Set configs
+     *
+     * @param ConfigService $configService ConfigService
+     * @return void
+     */
+    private function setConfigs(ConfigService $configService) {
+
+        self::$services[self::CONFIG_SERIVCE] = [
+            'type' => self::TYPE_STATIC,
+            'class' => $configService
+        ];
+
+    }
+
+    /**
+     * Create service class
+     *
+     * @param string $service Service
+     * @return Object
+     */
+    private function create_service($service) {
+
+        if (is_callable($service)) {
+            return $service($this);
+        }
+
+        return new $service();
 
     }
 
@@ -81,25 +113,21 @@ final class Manager implements ContainerInterface
      */
     public function append($key, $service, $type) {
 
-        if (isset($this->services[$key])) {
+        if (isset(self::$services[$key])) {
             throw new UnkownConfigException('Dupplicated service key ' . $key);
         }
 
-        if (!is_callable($service) || !is_string($service)) {
-            throw new UnkownConfigException('Service ' . (string)$service . ' must be callable class string');
+        if (!class_exists($service)) {
+            throw new UnkownConfigException('Cannot find service class ' . $service);
         }
 
         if (!in_array($type, [self::TYPE_ALIAS, self::TYPE_DYNAMIC, self::TYPE_STATIC])) {
             throw new UnkownConfigException('Unkown config type ' . $type);
         }
 
-        if ($type === self::TYPE_STATIC) {
-            $service = $service();
-        }
-
-        $this->services[$key] = [
+        self::$services[$key] = [
             'type' => $type,
-            'class' => $service
+            'class' => $type === self::TYPE_STATIC ? $this->create_service($service) : $service
         ];
 
     }
@@ -121,7 +149,7 @@ final class Manager implements ContainerInterface
             throw new UnkownServiceException('Unkown service ' . $id);
         }
 
-        $service = $this->services[$id];
+        $service = self::$services[$id];
 
         $service_type = $service['type'];
         $service_class = $service['class'];
@@ -132,7 +160,7 @@ final class Manager implements ContainerInterface
                 return $this->get($service_class);
 
             case self::TYPE_DYNAMIC:
-                return $service_class();
+                return $this->create_service($service_class);
 
             case self::TYPE_STATIC:
 
@@ -161,6 +189,6 @@ final class Manager implements ContainerInterface
      */
     public function has($id)
     {
-        return isset($services[$id]);
+        return isset(self::$services[$id]);
     }
 }
